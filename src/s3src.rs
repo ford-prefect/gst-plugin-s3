@@ -52,18 +52,20 @@ impl Source for S3Src {
         Box::new(|url: &Url| -> Result<(), UriError> {
             if url.scheme() != "s3" {
                 return Err(UriError::new(UriErrorKind::UnsupportedProtocol,
-                                  Some(format!("Unsupported URI '{}'", url.scheme()))));
+                                         Some(format!("Unsupported URI '{}'", url.scheme()))));
             }
 
             match url.host_str() {
-                None =>
+                None => {
                     Err(UriError::new(UriErrorKind::BadUri,
-                                          Some(format!("Invalid host in uri '{}'", url.as_str())))),
-                Some(hostname) if Region::from_str(hostname).is_err() =>
+                                      Some(format!("Invalid host in uri '{}'", url.as_str()))))
+                }
+                Some(hostname) if Region::from_str(hostname).is_err() => {
                     Err(UriError::new(UriErrorKind::BadUri,
-                                      Some(format!("Invalid region '{}'", url.host_str().unwrap())))),
-                _ =>
-                    Ok(()),
+                                      Some(format!("Invalid region '{}'",
+                                                   url.host_str().unwrap()))))
+                }
+                _ => Ok(()),
             }
         })
     }
