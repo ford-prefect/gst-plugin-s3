@@ -6,9 +6,10 @@ repository = "https://github.com/ford-prefect/gst-plugin-s3"
 license = "LGPL-3.0"
 
 [dependencies]
-url = "1.1"
 gst-plugin = { git = "https://github.com/sdroege/gst-plugin-rs" }
 #gst-plugin = { path = "../gst-plugin-rs/gst-plugin" }
+slog = "2.0"
+url = "1.1"
 
 [lib]
 name = "gsts3"

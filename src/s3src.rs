@@ -15,19 +15,27 @@
 // Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
 // Boston, MA 02110-1301, USA.
 
+use slog::Logger;
 use url::Url;
 
 use gst_plugin::buffer::*;
 use gst_plugin::error::*;
+use gst_plugin::log::*;
 use gst_plugin::source::*;
 use gst_plugin::utils::*;
 
 pub struct S3Src {
+    logger: Logger,
 }
 
 impl S3Src {
     pub fn new(element: Element) -> S3Src {
         S3Src {
+            logger: Logger::root(GstDebugDrain::new(Some(&element),
+                                                    "s3src",
+                                                    0,
+                                                    "Amazon S3 Source"),
+                                 o!()),
         }
     }
 

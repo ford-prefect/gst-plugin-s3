@@ -17,6 +17,8 @@
 
 #![crate_type="cdylib"]
 
+#[macro_use]
+extern crate slog;
 extern crate url;
 
 #[macro_use]
