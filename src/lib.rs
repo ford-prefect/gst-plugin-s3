@@ -28,6 +28,7 @@ extern crate gst_plugin;
 use gst_plugin::plugin::*;
 use gst_plugin::source::*;
 
+mod s3url;
 mod s3src;
 
 use s3src::S3Src;

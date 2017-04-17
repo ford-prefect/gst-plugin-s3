@@ -15,9 +15,6 @@
 // Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
 // Boston, MA 02110-1301, USA.
 
-use std::str::FromStr;
-
-use rusoto::Region;
 use slog::Logger;
 use url::Url;
 
@@ -26,6 +23,8 @@ use gst_plugin::error::*;
 use gst_plugin::log::*;
 use gst_plugin::source::*;
 use gst_plugin::utils::*;
+
+use s3url::*;
 
 pub struct S3Src {
     logger: Logger,
@@ -50,24 +49,9 @@ impl S3Src {
 impl Source for S3Src {
     fn uri_validator(&self) -> Box<UriValidator> {
         Box::new(|url: &Url| -> Result<(), UriError> {
-            if url.scheme() != "s3" {
-                return Err(UriError::new(UriErrorKind::UnsupportedProtocol,
-                                         Some(format!("Unsupported URI '{}'", url.scheme()))));
-            }
-
-            match url.host_str() {
-                None => {
-                    Err(UriError::new(UriErrorKind::BadUri,
-                                      Some(format!("Invalid host in uri '{}'", url.as_str()))))
-                }
-                Some(hostname) if Region::from_str(hostname).is_err() => {
-                    Err(UriError::new(UriErrorKind::BadUri,
-                                      Some(format!("Invalid region '{}'",
-                                                   url.host_str().unwrap()))))
-                }
-                _ => Ok(()),
-            }
-        })
+                     parse_s3_url(url)?;
+                     Ok(())
+                 })
     }
 
     fn is_seekable(&self) -> bool {
