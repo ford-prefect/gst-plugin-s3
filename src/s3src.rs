@@ -15,6 +15,9 @@
 // Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
 // Boston, MA 02110-1301, USA.
 
+use std::str::FromStr;
+
+use rusoto::Region;
 use slog::Logger;
 use url::Url;
 
@@ -47,8 +50,21 @@ impl S3Src {
 impl Source for S3Src {
     fn uri_validator(&self) -> Box<UriValidator> {
         Box::new(|url: &Url| -> Result<(), UriError> {
-            // FIXME
-            Ok(())
+            if url.scheme() != "s3" {
+                return Err(UriError::new(UriErrorKind::UnsupportedProtocol,
+                                  Some(format!("Unsupported URI '{}'", url.scheme()))));
+            }
+
+            match url.host_str() {
+                None =>
+                    Err(UriError::new(UriErrorKind::BadUri,
+                                          Some(format!("Invalid host in uri '{}'", url.as_str())))),
+                Some(hostname) if Region::from_str(hostname).is_err() =>
+                    Err(UriError::new(UriErrorKind::BadUri,
+                                      Some(format!("Invalid region '{}'", url.host_str().unwrap())))),
+                _ =>
+                    Ok(()),
+            }
         })
     }
 

@@ -17,6 +17,7 @@
 
 #![crate_type="cdylib"]
 
+extern crate rusoto;
 #[macro_use]
 extern crate slog;
 extern crate url;
@@ -41,7 +42,7 @@ fn plugin_init(plugin: &Plugin) -> bool {
                         author: "Arun Raghavan <arun@arunraghavan.net>".into(),
                         rank: 256,
                         create_instance: S3Src::new_boxed,
-                        protocols: vec![],
+                        protocols: vec!["s3".into()],
                         push_only: true,
                     });
 

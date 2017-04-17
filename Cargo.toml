@@ -8,6 +8,7 @@ license = "LGPL-3.0"
 [dependencies]
 gst-plugin = { git = "https://github.com/sdroege/gst-plugin-rs" }
 #gst-plugin = { path = "../gst-plugin-rs/gst-plugin" }
+rusoto = "0.24"
 slog = "2.0"
 url = "1.1"
 
