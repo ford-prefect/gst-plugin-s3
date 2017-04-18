@@ -182,27 +182,14 @@ impl Source for S3Src {
         let data = self.get(offset, length as u64)
             .or_else(|err| Err(FlowError::Error(err)))?;
 
-        {
-            let mut map = match buffer.map_readwrite() {
-                None => {
-                    return Err(FlowError::Error(error_msg!(SourceError::Failure,
-                                                           ["Failed to map buffer"])));
-                }
-                Some(map) => map,
-            };
-
-            if map.get_size() < data.len() {
-                return Err(FlowError::Error(error_msg!(SourceError::Failure,
-                                                       ["Read {} bytes, but buffer has {} bytes",
-                                                        data.len(),
-                                                        map.get_size()])));
-            }
-
-            let buf = map.as_mut_slice();
-
-            buf.copy_from_slice(data.as_slice());
-        }
-
+        buffer
+            .copy_from_slice(0, data.as_slice())
+            .or_else(|copied| {
+                         Err(FlowError::Error(error_msg!(SourceError::Failure,
+                                                         ["Read {} bytes, but buffer has {} bytes",
+                                                          data.len(),
+                                                          copied])))
+                     })?;
         buffer.set_size(data.len());
 
         Ok(())
