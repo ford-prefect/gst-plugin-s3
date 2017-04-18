@@ -97,6 +97,42 @@ impl S3Src {
         }
 
     }
+
+    fn get(self: &S3Src, offset: u64, length: u64) -> Result<Vec<u8>, ErrorMessage> {
+        let (url, client) = match self.state {
+            StreamingState::Started {
+                ref url,
+                ref client,
+                ..
+            } => (url, client),
+            StreamingState::Stopped => {
+                return Err(error_msg!(SourceError::Failure, ["Cannot GET before start()"]));
+            }
+        };
+
+        let request = GetObjectRequest {
+            bucket: url.bucket.clone(),
+            key: url.object.clone(),
+            range: Some(format!("bytes={}-{}", offset, offset + length - 1)),
+            version_id: url.version.clone(),
+            ..Default::default()
+        };
+
+        debug!(self.logger,
+               "Requesting range: {}-{}",
+               offset,
+               offset + length - 1);
+
+        let output = client
+            .get_object(&request)
+            .or_else(|err| Err(error_msg!(SourceError::NotFound, [err.to_string()])))?;
+
+        debug!(self.logger, "Read {} bytes", output.content_length.unwrap());
+
+        output
+            .body
+            .ok_or(error_msg!(SourceError::NotFound, ["Could not GET object"]))
+    }
 }
 
 impl Source for S3Src {
@@ -108,19 +144,22 @@ impl Source for S3Src {
     }
 
     fn is_seekable(&self) -> bool {
-        // FIXME
-        false
+        true
     }
 
     fn get_size(&self) -> Option<u64> {
         match self.state {
             StreamingState::Stopped => None,
-            StreamingState::Started { size: size, .. } => Some(size),
+            StreamingState::Started { size, .. } => Some(size),
         }
     }
 
     fn start(&mut self, url: Url) -> Result<(), ErrorMessage> {
-        // FIXME: check state
+        if let StreamingState::Started { .. } = self.state {
+            return Err(error_msg!(SourceError::Failure,
+                                  ["Cannot start() while already started"]));
+        }
+
         let s3url = parse_s3_url(&url)
             .or_else(|err| Err(error_msg!(SourceError::NotFound, [err.to_string()])))?;
 
@@ -138,19 +177,49 @@ impl Source for S3Src {
     }
 
     fn stop(&mut self) -> Result<(), ErrorMessage> {
-        // FIXME: check state
+        if let StreamingState::Stopped = self.state {
+            return Err(error_msg!(SourceError::Failure, ["Cannot stop() before start()"]));
+        }
+
         self.state = StreamingState::Stopped;
 
         Ok(())
     }
 
     fn fill(&mut self, offset: u64, length: u32, buffer: &mut Buffer) -> Result<(), FlowError> {
-        // FIXME
+        // FIXME: sanity check on offset and length
+        let data = self.get(offset, length as u64)
+            .or_else(|err| Err(FlowError::Error(err)))?;
+
+        {
+            let mut map = match buffer.map_readwrite() {
+                None => {
+                    return Err(FlowError::Error(error_msg!(SourceError::Failure,
+                                                           ["Failed to map buffer"])));
+                }
+                Some(map) => map,
+            };
+
+            if map.get_size() < data.len() {
+                return Err(FlowError::Error(error_msg!(SourceError::Failure,
+                                                       ["Read {} bytes, but buffer has {} bytes",
+                                                        data.len(),
+                                                        map.get_size()])));
+            }
+
+            let buf = map.as_mut_slice();
+
+            for (i, d) in data.iter().enumerate() {
+                buf[i] = *d;
+            }
+        }
+
+        buffer.set_size(data.len());
+
         Ok(())
     }
 
-    fn seek(&mut self, start: u64, stop: Option<u64>) -> Result<(), ErrorMessage> {
-        // FIXME
+    fn seek(&mut self, _: u64, _: Option<u64>) -> Result<(), ErrorMessage> {
         Ok(())
     }
 }
