@@ -17,6 +17,7 @@
 
 #![crate_type="cdylib"]
 
+extern crate hyper;
 extern crate rusoto;
 #[macro_use]
 extern crate slog;
