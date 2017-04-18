@@ -200,9 +200,7 @@ impl Source for S3Src {
 
             let buf = map.as_mut_slice();
 
-            for (i, d) in data.iter().enumerate() {
-                buf[i] = *d;
-            }
+            buf.copy_from_slice(data.as_slice());
         }
 
         buffer.set_size(data.len());

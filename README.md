@@ -31,5 +31,4 @@ A bunch of things need work:
 
  * We need to add support for `create()` rather than fill in the `Source` trait
    (this is in [gst-plugin-rs](https://github.com/sdroege/gst-plugin-rs). Using
-   `fill()` as we current do means we're doing an extra memcpy (almost
-   certainly 1 byte at a time ☹)
+   `fill()` as we current do means we're doing an extra memcpy.
