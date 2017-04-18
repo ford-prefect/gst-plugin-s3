@@ -120,6 +120,7 @@ impl Source for S3Src {
     }
 
     fn start(&mut self, url: Url) -> Result<(), ErrorMessage> {
+        // FIXME: check state
         let s3url = parse_s3_url(&url)
             .or_else(|err| Err(error_msg!(SourceError::NotFound, [err.to_string()])))?;
 
@@ -137,6 +138,7 @@ impl Source for S3Src {
     }
 
     fn stop(&mut self) -> Result<(), ErrorMessage> {
+        // FIXME: check state
         self.state = StreamingState::Stopped;
 
         Ok(())
