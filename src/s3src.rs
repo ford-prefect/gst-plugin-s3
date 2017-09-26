@@ -61,7 +61,7 @@ impl S3Src {
                      })?;
         let provider = DefaultCredentialsProvider::new().unwrap();
 
-        Ok(S3Client::new(dispatcher, provider, url.region))
+        Ok(S3Client::new(dispatcher, provider, url.region.clone()))
     }
 
     fn head(self: &S3Src, client: &GstS3Client, url: &GstS3Url) -> Result<u64, ErrorMessage> {
@@ -119,9 +119,14 @@ impl S3Src {
 
         debug!(self.logger, "Read {} bytes", output.content_length.unwrap());
 
-        output
-            .body
-            .ok_or(error_msg!(SourceError::NotFound, ["Could not GET object"]))
+        let mut body : Vec<u8> = Vec::new();
+
+        output.body
+            .unwrap()
+            .read_to_end(&mut body)
+            .or_else(|err| Err(error_msg!(SourceError::Failure, [err.to_string()])))?;
+
+        Ok(body)
     }
 }
 

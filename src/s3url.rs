@@ -9,16 +9,15 @@
 use std::str::FromStr;
 
 use rusoto_core::Region;
-use rusoto_s3::{BucketName, ObjectKey, ObjectVersionId};
 use url::Url;
 
 use gst_plugin::error::*;
 
 pub struct GstS3Url {
     pub region: Region,
-    pub bucket: BucketName,
-    pub object: ObjectKey,
-    pub version: Option<ObjectVersionId>,
+    pub bucket: String,
+    pub object: String,
+    pub version: Option<String>,
 }
 
 pub fn parse_s3_url(url: &Url) -> Result<GstS3Url, UriError> {
