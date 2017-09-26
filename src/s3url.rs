@@ -8,8 +8,8 @@
 
 use std::str::FromStr;
 
-use rusoto::Region;
-use rusoto::s3::{BucketName, ObjectKey, ObjectVersionId};
+use rusoto_core::Region;
+use rusoto_s3::{BucketName, ObjectKey, ObjectVersionId};
 use url::Url;
 
 use gst_plugin::error::*;

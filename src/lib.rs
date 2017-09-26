@@ -9,7 +9,8 @@
 #![crate_type="cdylib"]
 
 extern crate hyper;
-extern crate rusoto;
+extern crate rusoto_core;
+extern crate rusoto_s3;
 #[macro_use]
 extern crate slog;
 extern crate url;

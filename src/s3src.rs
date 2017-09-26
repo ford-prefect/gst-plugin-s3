@@ -7,9 +7,8 @@
 // except according to those terms.
 
 use hyper;
-use rusoto::default_tls_client;
-use rusoto::DefaultCredentialsProvider;
-use rusoto::s3::*;
+use rusoto_core::{DefaultCredentialsProvider, default_tls_client};
+use rusoto_s3::*;
 
 use slog::Logger;
 use url::Url;

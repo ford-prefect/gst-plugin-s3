@@ -6,10 +6,10 @@ repository = "https://github.com/ford-prefect/gst-plugin-s3"
 license = "MIT/Apache-2.0"
 
 [dependencies]
-gst-plugin = { git = "https://github.com/sdroege/gst-plugin-rs" }
-#gst-plugin = { path = "../gst-plugin-rs/gst-plugin" }
+gst-plugin = { git = "https://github.com/sdroege/gst-plugin-rs", rev = "021de8af1f43cd3e381203a5b86c8b231b051936" }
 hyper = "0.10"
-rusoto = { version = "0.24", features = [ "s3" ] }
+rusoto_core = "0.27.0"
+rusoto_s3 = "0.27.0"
 slog = "2.0"
 url = "1.1"
 
