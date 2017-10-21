@@ -6,7 +6,9 @@ repository = "https://github.com/ford-prefect/gst-plugin-s3"
 license = "MIT/Apache-2.0"
 
 [dependencies]
-gst-plugin = { git = "https://github.com/sdroege/gst-plugin-rs", rev = "021de8af1f43cd3e381203a5b86c8b231b051936" }
+gst-plugin = { git = "https://github.com/sdroege/gst-plugin-rs" }
+gst-plugin-simple = { git = "https://github.com/sdroege/gst-plugin-rs" }
+gstreamer = { git = "https://github.com/sdroege/gstreamer-rs" }
 hyper = "0.10"
 rusoto_core = "0.28.0"
 rusoto_s3 = "0.28.0"

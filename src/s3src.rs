@@ -10,14 +10,14 @@ use hyper;
 use rusoto_core::{DefaultCredentialsProvider, default_tls_client};
 use rusoto_s3::*;
 
-use slog::Logger;
 use url::Url;
 
-use gst_plugin::buffer::*;
+use gst;
+use gst::buffer::*;
 use gst_plugin::error::*;
-use gst_plugin::log::*;
-use gst_plugin::source::*;
-use gst_plugin::utils::*;
+
+use gst_plugin_simple::UriValidator;
+use gst_plugin_simple::source::*;
 
 use s3url::*;
 
@@ -34,29 +34,27 @@ enum StreamingState {
 
 pub struct S3Src {
     state: StreamingState,
-    logger: Logger,
+    cat: gst::DebugCategory,
 }
 
 impl S3Src {
-    pub fn new(element: Element) -> S3Src {
+    pub fn new(_: &RsBaseSrc) -> S3Src {
         S3Src {
             state: StreamingState::Stopped,
-            logger: Logger::root(GstDebugDrain::new(Some(&element),
-                                                    "s3src",
-                                                    0,
-                                                    "Amazon S3 Source"),
-                                 o!()),
+            cat: gst::DebugCategory::new("s3src",
+                                         gst::DebugColorFlags::empty(),
+                                         "Amazon S3 Source"),
         }
     }
 
-    pub fn new_boxed(element: Element) -> Box<Source> {
-        Box::new(S3Src::new(element))
+    pub fn new_boxed(src: &RsBaseSrc) -> Box<SourceImpl> {
+        Box::new(S3Src::new(src))
     }
 
     fn connect(self: &S3Src, url: &GstS3Url) -> Result<GstS3Client, ErrorMessage> {
         let dispatcher = default_tls_client()
             .or_else(|err| {
-                         Err(error_msg!(SourceError::Failure,
+                         Err(error_msg!(gst::LibraryError::Failed,
                                         ["Failed to create TLs client: '{}'", err]))
                      })?;
         let provider = DefaultCredentialsProvider::new().unwrap();
@@ -64,7 +62,7 @@ impl S3Src {
         Ok(S3Client::new(dispatcher, provider, url.region.clone()))
     }
 
-    fn head(self: &S3Src, client: &GstS3Client, url: &GstS3Url) -> Result<u64, ErrorMessage> {
+    fn head(self: &S3Src, src: &RsBaseSrc, client: &GstS3Client, url: &GstS3Url) -> Result<u64, ErrorMessage> {
         let request = HeadObjectRequest {
             bucket: url.bucket.clone(),
             key: url.object.clone(),
@@ -75,20 +73,23 @@ impl S3Src {
         let output = client
             .head_object(&request)
             .or_else(|err| {
-                         Err(error_msg!(SourceError::OpenFailed,
+                         Err(error_msg!(gst::ResourceError::NotFound,
                                         ["Failed to HEAD object: {}", err]))
                      })?;
 
         if let Some(size) = output.content_length {
-            info!(self.logger, "HEAD success, content length = {}", size);
+            gst_info!(self.cat,
+                      obj: src,
+                      "HEAD success, content length = {}",
+                      size);
             Ok(size as u64)
         } else {
-            Err(error_msg!(SourceError::OpenFailed, ["Failed to get content length"]))
+            Err(error_msg!(gst::ResourceError::Read, ["Failed to get content length"]))
         }
 
     }
 
-    fn get(self: &S3Src, offset: u64, length: u64) -> Result<Vec<u8>, ErrorMessage> {
+    fn get(self: &S3Src, src: &RsBaseSrc, offset: u64, length: u64) -> Result<Vec<u8>, ErrorMessage> {
         let (url, client) = match self.state {
             StreamingState::Started {
                 ref url,
@@ -96,7 +97,7 @@ impl S3Src {
                 ..
             } => (url, client),
             StreamingState::Stopped => {
-                return Err(error_msg!(SourceError::Failure, ["Cannot GET before start()"]));
+                return Err(error_msg!(gst::LibraryError::Failed, ["Cannot GET before start()"]));
             }
         };
 
@@ -108,29 +109,34 @@ impl S3Src {
             ..Default::default()
         };
 
-        debug!(self.logger,
-               "Requesting range: {}-{}",
-               offset,
-               offset + length - 1);
+        gst_debug!(self.cat,
+                   obj: src,
+                   "Requesting range: {}-{}",
+                   offset,
+                   offset + length - 1);
 
         let output = client
             .get_object(&request)
-            .or_else(|err| Err(error_msg!(SourceError::NotFound, [err.to_string()])))?;
+            .or_else(|err| Err(error_msg!(gst::ResourceError::Read, [err.to_string()])))?;
 
-        debug!(self.logger, "Read {} bytes", output.content_length.unwrap());
+        gst_debug!(self.cat,
+                   obj: src,
+                   "Read {} bytes",
+                   output.content_length.unwrap());
 
-        let mut body : Vec<u8> = Vec::new();
+        let mut body: Vec<u8> = Vec::new();
 
-        output.body
+        output
+            .body
             .unwrap()
             .read_to_end(&mut body)
-            .or_else(|err| Err(error_msg!(SourceError::Failure, [err.to_string()])))?;
+            .or_else(|err| Err(error_msg!(gst::ResourceError::Read, [err.to_string()])))?;
 
         Ok(body)
     }
 }
 
-impl Source for S3Src {
+impl SourceImpl for S3Src {
     fn uri_validator(&self) -> Box<UriValidator> {
         Box::new(|url: &Url| -> Result<(), UriError> {
                      parse_s3_url(url)?;
@@ -138,29 +144,29 @@ impl Source for S3Src {
                  })
     }
 
-    fn is_seekable(&self) -> bool {
+    fn is_seekable(&self, _: &RsBaseSrc) -> bool {
         true
     }
 
-    fn get_size(&self) -> Option<u64> {
+    fn get_size(&self, _: &RsBaseSrc) -> Option<u64> {
         match self.state {
             StreamingState::Stopped => None,
             StreamingState::Started { size, .. } => Some(size),
         }
     }
 
-    fn start(&mut self, url: Url) -> Result<(), ErrorMessage> {
+    fn start(&mut self, src: &RsBaseSrc, url: Url) -> Result<(), ErrorMessage> {
         if let StreamingState::Started { .. } = self.state {
-            return Err(error_msg!(SourceError::Failure,
+            return Err(error_msg!(gst::LibraryError::Failed,
                                   ["Cannot start() while already started"]));
         }
 
         let s3url = parse_s3_url(&url)
-            .or_else(|err| Err(error_msg!(SourceError::NotFound, [err.to_string()])))?;
+            .or_else(|err| Err(error_msg!(gst::ResourceError::Failed, [err.to_string()])))?;
 
         let s3client = self.connect(&s3url)?;
 
-        let size = self.head(&s3client, &s3url)?;
+        let size = self.head(src, &s3client, &s3url)?;
 
         self.state = StreamingState::Started {
             url: s3url,
@@ -171,9 +177,9 @@ impl Source for S3Src {
         Ok(())
     }
 
-    fn stop(&mut self) -> Result<(), ErrorMessage> {
+    fn stop(&mut self, _: &RsBaseSrc) -> Result<(), ErrorMessage> {
         if let StreamingState::Stopped = self.state {
-            return Err(error_msg!(SourceError::Failure, ["Cannot stop() before start()"]));
+            return Err(error_msg!(gst::LibraryError::Failed, ["Cannot stop() before start()"]));
         }
 
         self.state = StreamingState::Stopped;
@@ -181,15 +187,15 @@ impl Source for S3Src {
         Ok(())
     }
 
-    fn fill(&mut self, offset: u64, length: u32, buffer: &mut Buffer) -> Result<(), FlowError> {
+    fn fill(&mut self, src: &RsBaseSrc, offset: u64, length: u32, buffer: &mut BufferRef) -> Result<(), FlowError> {
         // FIXME: sanity check on offset and length
-        let data = self.get(offset, length as u64)
+        let data = self.get(src, offset, length as u64)
             .or_else(|err| Err(FlowError::Error(err)))?;
 
         buffer
             .copy_from_slice(0, data.as_slice())
             .or_else(|copied| {
-                         Err(FlowError::Error(error_msg!(SourceError::Failure,
+                         Err(FlowError::Error(error_msg!(gst::ResourceError::Read,
                                                          ["Read {} bytes, but buffer has {} bytes",
                                                           data.len(),
                                                           copied])))
@@ -199,7 +205,7 @@ impl Source for S3Src {
         Ok(())
     }
 
-    fn seek(&mut self, _: u64, _: Option<u64>) -> Result<(), ErrorMessage> {
+    fn seek(&mut self, _: &RsBaseSrc, _: u64, _: Option<u64>) -> Result<(), ErrorMessage> {
         Ok(())
     }
 }

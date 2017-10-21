@@ -11,22 +11,22 @@
 extern crate hyper;
 extern crate rusoto_core;
 extern crate rusoto_s3;
-#[macro_use]
-extern crate slog;
 extern crate url;
 
 #[macro_use]
 extern crate gst_plugin;
+extern crate gst_plugin_simple;
+#[macro_use]
+extern crate gstreamer as gst;
 
-use gst_plugin::plugin::*;
-use gst_plugin::source::*;
+use gst_plugin_simple::source::*;
 
 mod s3url;
 mod s3src;
 
 use s3src::S3Src;
 
-fn plugin_init(plugin: &Plugin) -> bool {
+fn plugin_init(plugin: &gst::Plugin) -> bool {
     source_register(plugin,
                     SourceInfo {
                         name: "s3src".into(),
