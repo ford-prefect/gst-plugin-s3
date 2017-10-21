@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use hyper;
-use rusoto_core::{DefaultCredentialsProvider, default_tls_client};
+use rusoto_core::{default_tls_client, DefaultCredentialsProvider};
 use rusoto_s3::*;
 
 use url::Url;
@@ -41,9 +41,11 @@ impl S3Src {
     pub fn new(_: &RsBaseSrc) -> S3Src {
         S3Src {
             state: StreamingState::Stopped,
-            cat: gst::DebugCategory::new("s3src",
-                                         gst::DebugColorFlags::empty(),
-                                         "Amazon S3 Source"),
+            cat: gst::DebugCategory::new(
+                "s3src",
+                gst::DebugColorFlags::empty(),
+                "Amazon S3 Source",
+            ),
         }
     }
 
@@ -52,21 +54,23 @@ impl S3Src {
     }
 
     fn connect(self: &S3Src, url: &GstS3Url) -> Result<GstS3Client, ErrorMessage> {
-        let dispatcher = default_tls_client()
-            .or_else(|err| {
-                         Err(error_msg!(gst::LibraryError::Failed,
-                                        ["Failed to create TLs client: '{}'", err]))
-                     })?;
+        let dispatcher = default_tls_client().or_else(|err| {
+            Err(error_msg!(
+                gst::LibraryError::Failed,
+                ["Failed to create TLs client: '{}'", err]
+            ))
+        })?;
         let provider = DefaultCredentialsProvider::new().unwrap();
 
         Ok(S3Client::new(dispatcher, provider, url.region.clone()))
     }
 
-    fn head(self: &S3Src,
-            src: &RsBaseSrc,
-            client: &GstS3Client,
-            url: &GstS3Url)
-            -> Result<u64, ErrorMessage> {
+    fn head(
+        self: &S3Src,
+        src: &RsBaseSrc,
+        client: &GstS3Client,
+        url: &GstS3Url,
+    ) -> Result<u64, ErrorMessage> {
         let request = HeadObjectRequest {
             bucket: url.bucket.clone(),
             key: url.object.clone(),
@@ -74,30 +78,35 @@ impl S3Src {
             ..Default::default()
         };
 
-        let output = client
-            .head_object(&request)
-            .or_else(|err| {
-                         Err(error_msg!(gst::ResourceError::NotFound,
-                                        ["Failed to HEAD object: {}", err]))
-                     })?;
+        let output = client.head_object(&request).or_else(|err| {
+            Err(error_msg!(
+                gst::ResourceError::NotFound,
+                ["Failed to HEAD object: {}", err]
+            ))
+        })?;
 
         if let Some(size) = output.content_length {
-            gst_info!(self.cat,
-                      obj: src,
-                      "HEAD success, content length = {}",
-                      size);
+            gst_info!(
+                self.cat,
+                obj: src,
+                "HEAD success, content length = {}",
+                size
+            );
             Ok(size as u64)
         } else {
-            Err(error_msg!(gst::ResourceError::Read, ["Failed to get content length"]))
+            Err(error_msg!(
+                gst::ResourceError::Read,
+                ["Failed to get content length"]
+            ))
         }
-
     }
 
-    fn get(self: &S3Src,
-           src: &RsBaseSrc,
-           offset: u64,
-           length: u64)
-           -> Result<Vec<u8>, ErrorMessage> {
+    fn get(
+        self: &S3Src,
+        src: &RsBaseSrc,
+        offset: u64,
+        length: u64,
+    ) -> Result<Vec<u8>, ErrorMessage> {
         let (url, client) = match self.state {
             StreamingState::Started {
                 ref url,
@@ -105,7 +114,10 @@ impl S3Src {
                 ..
             } => (url, client),
             StreamingState::Stopped => {
-                return Err(error_msg!(gst::LibraryError::Failed, ["Cannot GET before start()"]));
+                return Err(error_msg!(
+                    gst::LibraryError::Failed,
+                    ["Cannot GET before start()"]
+                ));
             }
         };
 
@@ -117,29 +129,30 @@ impl S3Src {
             ..Default::default()
         };
 
-        gst_debug!(self.cat,
-                   obj: src,
-                   "Requesting range: {}-{}",
-                   offset,
-                   offset + length - 1);
+        gst_debug!(
+            self.cat,
+            obj: src,
+            "Requesting range: {}-{}",
+            offset,
+            offset + length - 1
+        );
 
-        let output =
-            client
-                .get_object(&request)
-                .or_else(|err| Err(error_msg!(gst::ResourceError::Read, [err.to_string()])))?;
+        let output = client.get_object(&request).or_else(|err| {
+            Err(error_msg!(gst::ResourceError::Read, [err.to_string()]))
+        })?;
 
-        gst_debug!(self.cat,
-                   obj: src,
-                   "Read {} bytes",
-                   output.content_length.unwrap());
+        gst_debug!(
+            self.cat,
+            obj: src,
+            "Read {} bytes",
+            output.content_length.unwrap()
+        );
 
         let mut body: Vec<u8> = Vec::new();
 
-        output
-            .body
-            .unwrap()
-            .read_to_end(&mut body)
-            .or_else(|err| Err(error_msg!(gst::ResourceError::Read, [err.to_string()])))?;
+        output.body.unwrap().read_to_end(&mut body).or_else(|err| {
+            Err(error_msg!(gst::ResourceError::Read, [err.to_string()]))
+        })?;
 
         Ok(body)
     }
@@ -148,9 +161,9 @@ impl S3Src {
 impl SourceImpl for S3Src {
     fn uri_validator(&self) -> Box<UriValidator> {
         Box::new(|url: &Url| -> Result<(), UriError> {
-                     parse_s3_url(url)?;
-                     Ok(())
-                 })
+            parse_s3_url(url)?;
+            Ok(())
+        })
     }
 
     fn is_seekable(&self, _: &RsBaseSrc) -> bool {
@@ -166,13 +179,15 @@ impl SourceImpl for S3Src {
 
     fn start(&mut self, src: &RsBaseSrc, url: Url) -> Result<(), ErrorMessage> {
         if let StreamingState::Started { .. } = self.state {
-            return Err(error_msg!(gst::LibraryError::Failed,
-                                  ["Cannot start() while already started"]));
+            return Err(error_msg!(
+                gst::LibraryError::Failed,
+                ["Cannot start() while already started"]
+            ));
         }
 
-        let s3url =
-            parse_s3_url(&url)
-                .or_else(|err| Err(error_msg!(gst::ResourceError::Failed, [err.to_string()])))?;
+        let s3url = parse_s3_url(&url).or_else(|err| {
+            Err(error_msg!(gst::ResourceError::Failed, [err.to_string()]))
+        })?;
 
         let s3client = self.connect(&s3url)?;
 
@@ -189,7 +204,10 @@ impl SourceImpl for S3Src {
 
     fn stop(&mut self, _: &RsBaseSrc) -> Result<(), ErrorMessage> {
         if let StreamingState::Stopped = self.state {
-            return Err(error_msg!(gst::LibraryError::Failed, ["Cannot stop() before start()"]));
+            return Err(error_msg!(
+                gst::LibraryError::Failed,
+                ["Cannot stop() before start()"]
+            ));
         }
 
         self.state = StreamingState::Stopped;
@@ -197,12 +215,13 @@ impl SourceImpl for S3Src {
         Ok(())
     }
 
-    fn fill(&mut self,
-            src: &RsBaseSrc,
-            offset: u64,
-            length: u32,
-            buffer: &mut BufferRef)
-            -> Result<(), FlowError> {
+    fn fill(
+        &mut self,
+        src: &RsBaseSrc,
+        offset: u64,
+        length: u32,
+        buffer: &mut BufferRef,
+    ) -> Result<(), FlowError> {
         // FIXME: sanity check on offset and length
         let data = self.get(src, offset, length as u64)
             .or_else(|err| Err(FlowError::Error(err)))?;
@@ -210,11 +229,11 @@ impl SourceImpl for S3Src {
         buffer
             .copy_from_slice(0, data.as_slice())
             .or_else(|copied| {
-                         Err(FlowError::Error(error_msg!(gst::ResourceError::Read,
-                                                         ["Read {} bytes, but buffer has {} bytes",
-                                                          data.len(),
-                                                          copied])))
-                     })?;
+                Err(FlowError::Error(error_msg!(
+                    gst::ResourceError::Read,
+                    ["Read {} bytes, but buffer has {} bytes", data.len(), copied]
+                )))
+            })?;
         buffer.set_size(data.len());
 
         Ok(())
