@@ -62,7 +62,11 @@ impl S3Src {
         Ok(S3Client::new(dispatcher, provider, url.region.clone()))
     }
 
-    fn head(self: &S3Src, src: &RsBaseSrc, client: &GstS3Client, url: &GstS3Url) -> Result<u64, ErrorMessage> {
+    fn head(self: &S3Src,
+            src: &RsBaseSrc,
+            client: &GstS3Client,
+            url: &GstS3Url)
+            -> Result<u64, ErrorMessage> {
         let request = HeadObjectRequest {
             bucket: url.bucket.clone(),
             key: url.object.clone(),
@@ -89,7 +93,11 @@ impl S3Src {
 
     }
 
-    fn get(self: &S3Src, src: &RsBaseSrc, offset: u64, length: u64) -> Result<Vec<u8>, ErrorMessage> {
+    fn get(self: &S3Src,
+           src: &RsBaseSrc,
+           offset: u64,
+           length: u64)
+           -> Result<Vec<u8>, ErrorMessage> {
         let (url, client) = match self.state {
             StreamingState::Started {
                 ref url,
@@ -115,9 +123,10 @@ impl S3Src {
                    offset,
                    offset + length - 1);
 
-        let output = client
-            .get_object(&request)
-            .or_else(|err| Err(error_msg!(gst::ResourceError::Read, [err.to_string()])))?;
+        let output =
+            client
+                .get_object(&request)
+                .or_else(|err| Err(error_msg!(gst::ResourceError::Read, [err.to_string()])))?;
 
         gst_debug!(self.cat,
                    obj: src,
@@ -161,8 +170,9 @@ impl SourceImpl for S3Src {
                                   ["Cannot start() while already started"]));
         }
 
-        let s3url = parse_s3_url(&url)
-            .or_else(|err| Err(error_msg!(gst::ResourceError::Failed, [err.to_string()])))?;
+        let s3url =
+            parse_s3_url(&url)
+                .or_else(|err| Err(error_msg!(gst::ResourceError::Failed, [err.to_string()])))?;
 
         let s3client = self.connect(&s3url)?;
 
@@ -187,7 +197,12 @@ impl SourceImpl for S3Src {
         Ok(())
     }
 
-    fn fill(&mut self, src: &RsBaseSrc, offset: u64, length: u32, buffer: &mut BufferRef) -> Result<(), FlowError> {
+    fn fill(&mut self,
+            src: &RsBaseSrc,
+            offset: u64,
+            length: u32,
+            buffer: &mut BufferRef)
+            -> Result<(), FlowError> {
         // FIXME: sanity check on offset and length
         let data = self.get(src, offset, length as u64)
             .or_else(|err| Err(FlowError::Error(err)))?;

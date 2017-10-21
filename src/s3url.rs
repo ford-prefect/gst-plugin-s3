@@ -33,18 +33,16 @@ pub fn parse_s3_url(url: &Url) -> Result<GstS3Url, UriError> {
     }
 
     let h = url.host_str().unwrap();
-    let region = Region::from_str(h)
-        .or_else(|_| {
-                     Err(UriError::new(gst::URIError::BadUri,
-                                       format!("Invalid region '{}'", h)))
-                 })?;
+    let region =
+        Region::from_str(h)
+            .or_else(|_| {
+                         Err(UriError::new(gst::URIError::BadUri,
+                                           format!("Invalid region '{}'", h)))
+                     })?;
 
     let mut path =
         url.path_segments()
-            .ok_or_else(|| {
-                            UriError::new(gst::URIError::BadUri,
-                                          format!("Invalid uri '{}'", url))
-                        })?;
+            .ok_or_else(|| UriError::new(gst::URIError::BadUri, format!("Invalid uri '{}'", url)))?;
 
     let bucket = path.next().unwrap().to_string();
 
