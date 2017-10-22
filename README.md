@@ -1,5 +1,7 @@
 # gst-plugin-s3
 
+[![Build Status](https://travis-ci.org/ford-prefect/gst-plugin-s3.svg?branch=master)](https://travis-ci.org/ford-prefect/gst-plugin-s3)
+
 This is a [GStreamer](https://gstreamer.freedesktop.org/) plugin to interact
 with the [Amazon Simple Storage Service (S3)](https://aws.amazon.com/s3/).
 
