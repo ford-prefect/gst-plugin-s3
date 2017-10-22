@@ -37,18 +37,3 @@ $ gst-launch-1.0 \
     s3src uri=s3://ap-south-1/my-bucket/my-object-key/which-can-have-slashes?version=my-optional-version !
     filesink name=my-object.out
 ```
-
-### TODO
-
-A bunch of things need work:
-
- * The default blocksize is 4 kB, so we're making tiny `GET` requests to read
-   the data. This can be mitigated with a 64 kB blocksize (`blocksize=65536` in
-   the above command-line example). The proper fix for this is tracked in the
-   [rusoto issue for streaming support](https://github.com/rusoto/rusoto/issues/481)
-
- * Fetching by vesion hasn't been tested properly yet
-
- * We need to add support for `create()` rather than fill in the `Source` trait
-   (this is in [gst-plugin-rs](https://github.com/sdroege/gst-plugin-rs). Using
-   `fill()` as we current do means we're doing an extra memcpy.
