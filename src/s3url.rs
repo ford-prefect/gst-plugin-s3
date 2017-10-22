@@ -36,11 +36,11 @@ pub fn parse_s3_url(url: &Url) -> Result<GstS3Url, UriError> {
         ));
     }
 
-    let h = url.host_str().unwrap();
-    let region = Region::from_str(h).or_else(|_| {
+    let host = url.host_str().unwrap();
+    let region = Region::from_str(host).or_else(|_| {
         Err(UriError::new(
             gst::URIError::BadUri,
-            format!("Invalid region '{}'", h),
+            format!("Invalid region '{}'", host),
         ))
     })?;
 
@@ -77,7 +77,7 @@ pub fn parse_s3_url(url: &Url) -> Result<GstS3Url, UriError> {
         Some(_) => {
             return Err(UriError::new(
                 gst::URIError::BadUri,
-                format!("Bad query, only 'version' is supported"),
+                "Bad query, only 'version' is supported".to_owned(),
             ));
         }
     }
@@ -85,7 +85,7 @@ pub fn parse_s3_url(url: &Url) -> Result<GstS3Url, UriError> {
     if q.next() != None {
         return Err(UriError::new(
             gst::URIError::BadUri,
-            format!("Extra query terms, only 'version' is supported"),
+            "Extra query terms, only 'version' is supported".to_owned(),
         ));
     }
 

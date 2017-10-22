@@ -223,7 +223,7 @@ impl SourceImpl for S3Src {
         buffer: &mut BufferRef,
     ) -> Result<(), FlowError> {
         // FIXME: sanity check on offset and length
-        let data = self.get(src, offset, length as u64)
+        let data = self.get(src, offset, u64::from(length))
             .or_else(|err| Err(FlowError::Error(err)))?;
 
         buffer
