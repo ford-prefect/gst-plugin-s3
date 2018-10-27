@@ -184,10 +184,10 @@ impl ObjectImpl<BaseSrc> for S3Src {
 
         match *prop {
             Property::String("uri", ..) => {
-                let url_str = String::from(value.get::<&str>().unwrap());
+                let url_str = value.get().unwrap();
                 let mut url = self.url.lock().unwrap();
 
-                *url = match parse_s3_url(&url_str) {
+                *url = match parse_s3_url(url_str) {
                     Ok(url) => Some(url),
                     Err(err) => {
                         gst_error!(self.cat, obj: basesrc, "Could not parser uri {}: {}", url_str, err);

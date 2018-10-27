@@ -29,7 +29,7 @@ impl ToString for GstS3Url {
     }
 }
 
-pub fn parse_s3_url(url_str: &String) -> Result<GstS3Url, String> {
+pub fn parse_s3_url(url_str: &str) -> Result<GstS3Url, String> {
     let url = Url::parse(url_str).or_else(|err| {
         Err(format!("Parse error: {}", err))
     })?;
@@ -94,61 +94,49 @@ mod tests {
 
     #[test]
     fn cannot_be_base() {
-        let url = Url::parse("data:something").unwrap();
-        assert!(parse_s3_url(&url).is_err());
+        assert!(parse_s3_url("data:something").is_err());
     }
 
     #[test]
     fn invalid_scheme() {
-        let url = Url::parse("file:///dev/zero").unwrap();
-        assert!(parse_s3_url(&url).is_err());
+        assert!(parse_s3_url("file:///dev/zero").is_err());
     }
 
     #[test]
     fn bad_region() {
-        let url = Url::parse("s3://atlantis-1/i-hope-we/dont-find-this").unwrap();
-        assert!(parse_s3_url(&url).is_err());
+        assert!(parse_s3_url("s3://atlantis-1/i-hope-we/dont-find-this").is_err());
     }
 
     #[test]
     fn no_bucket() {
-        let url1 = Url::parse("s3://ap-south-1").unwrap();
-        assert!(parse_s3_url(&url1).is_err());
-        let url2 = Url::parse("s3://ap-south-1/").unwrap();
-        assert!(parse_s3_url(&url2).is_err());
+        assert!(parse_s3_url("s3://ap-south-1").is_err());
+        assert!(parse_s3_url("s3://ap-south-1/").is_err());
     }
 
     #[test]
     fn no_object() {
-        let url1 = Url::parse("s3://ap-south-1/my-bucket").unwrap();
-        assert!(parse_s3_url(&url1).is_err());
-        let url2 = Url::parse("s3://ap-south-1/my-bucket/").unwrap();
-        assert!(parse_s3_url(&url2).is_err());
+        assert!(parse_s3_url("s3://ap-south-1/my-bucket").is_err());
+        assert!(parse_s3_url("s3://ap-south-1/my-bucket/").is_err());
     }
 
     #[test]
     fn valid_simple() {
-        let url = Url::parse("s3://ap-south-1/my-bucket/my-object").unwrap();
-        assert!(parse_s3_url(&url).is_ok());
+        assert!(parse_s3_url("s3://ap-south-1/my-bucket/my-object").is_ok());
     }
 
     #[test]
     fn extraneous_query() {
-        let url = Url::parse("s3://ap-south-1/my-bucket/my-object?foo=bar").unwrap();
-        assert!(parse_s3_url(&url).is_err());
+        assert!(parse_s3_url("s3://ap-south-1/my-bucket/my-object?foo=bar").is_err());
     }
 
     #[test]
     fn valid_version() {
-        let url = Url::parse("s3://ap-south-1/my-bucket/my-object?version=one").unwrap();
-        assert!(parse_s3_url(&url).is_ok());
+        assert!(parse_s3_url("s3://ap-south-1/my-bucket/my-object?version=one").is_ok());
     }
 
     #[test]
     fn trailing_slash() {
         // Slashes are valid at the end of the object key
-        let url = Url::parse("s3://ap-south-1/my-bucket/my-object/").unwrap();
-        assert!(parse_s3_url(&url).is_ok());
+        assert!(parse_s3_url("s3://ap-south-1/my-bucket/my-object/").is_ok());
     }
-
 }
