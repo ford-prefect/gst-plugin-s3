@@ -19,6 +19,16 @@ pub struct GstS3Url {
     pub version: Option<String>,
 }
 
+impl ToString for GstS3Url {
+    fn to_string(&self) -> String {
+        format!("s3://{}/{}/{}{}",
+                self.region.name(),
+                self.bucket,
+                self.object,
+                if self.version.is_some() { format!("?version={}", self.version.clone().unwrap()) } else { "".to_string() })
+    }
+}
+
 pub fn parse_s3_url(url_str: &String) -> Result<GstS3Url, String> {
     let url = Url::parse(url_str).or_else(|err| {
         Err(format!("Parse error: {}", err))

@@ -204,7 +204,10 @@ impl ObjectImpl<BaseSrc> for S3Src {
 
         match *prop {
             Property::String("uri", ..) => {
-                let url = ""; // FIXME
+                let url = match *self.url.lock().unwrap() {
+                    Some(ref url) => url.to_string(),
+                    None => "".to_string()
+                };
 
                 Ok(url.to_value())
             },
