@@ -6,41 +6,53 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use hyper;
-use rusoto_core::{default_tls_client, DefaultCredentialsProvider};
+use std::sync::Mutex;
+
+use futures::{Future,Stream};
 use rusoto_s3::*;
 
-use url::Url;
+use gobject_subclass::object::*;
 
 use gst;
-use gst::buffer::*;
-use gst_plugin::error::*;
+use gst::prelude::*;
 
-use gst_plugin_simple::UriValidator;
-use gst_plugin_simple::source::*;
+use gst_base::prelude::*;
+
+use gst_plugin::base_src::*;
+use gst_plugin::element::*;
 
 use s3url::*;
-
-type GstS3Client = S3Client<DefaultCredentialsProvider, hyper::client::Client>;
 
 enum StreamingState {
     Stopped,
     Started {
         url: GstS3Url,
-        client: GstS3Client,
+        client: S3Client,
         size: u64,
     },
 }
 
 pub struct S3Src {
-    state: StreamingState,
+    url: Mutex<Option<GstS3Url>>,
+    state: Mutex<StreamingState>,
     cat: gst::DebugCategory,
 }
 
+static PROPERTIES: [Property; 1] = [Property::String(
+    "uri",
+    "URI",
+    "The S3 object URI",
+    None,
+    PropertyMutability::ReadWrite /* + GST_PARAM_MUTABLE_READY) */),
+];
+
 impl S3Src {
-    pub fn new(_: &RsBaseSrc) -> S3Src {
+    pub fn new(basesrc: &BaseSrc) -> S3Src {
+        basesrc.set_format(gst::Format::Bytes);
+
         S3Src {
-            state: StreamingState::Stopped,
+            url: Mutex::new(None),
+            state: Mutex::new(StreamingState::Stopped),
             cat: gst::DebugCategory::new(
                 "s3src",
                 gst::DebugColorFlags::empty(),
@@ -49,28 +61,35 @@ impl S3Src {
         }
     }
 
-    pub fn new_boxed(src: &RsBaseSrc) -> Box<SourceImpl> {
-        Box::new(S3Src::new(src))
+    fn class_init(klass: &mut BaseSrcClass) {
+        klass.set_metadata(
+            "Amazon S3 source",
+            "Source/Network",
+            "Reads an object from Amazon S3",
+            "Arun Raghavan <arun@arunraghavan.net>",
+        );
+
+        let caps = gst::Caps::new_any();
+        klass.add_pad_template(
+            gst::PadTemplate::new(
+                "src",
+                gst::PadDirection::Src,
+                gst::PadPresence::Always,
+                &caps));
+
+        klass.install_properties(&PROPERTIES);
     }
 
-    fn connect(self: &S3Src, url: &GstS3Url) -> Result<GstS3Client, ErrorMessage> {
-        let dispatcher = default_tls_client().or_else(|err| {
-            Err(error_msg!(
-                gst::LibraryError::Failed,
-                ["Failed to create TLs client: '{}'", err]
-            ))
-        })?;
-        let provider = DefaultCredentialsProvider::new().unwrap();
-
-        Ok(S3Client::new(dispatcher, provider, url.region.clone()))
+    fn connect(self: &S3Src, url: &GstS3Url) -> Result<S3Client, gst::ErrorMessage> {
+        Ok(S3Client::new(url.region.clone()))
     }
 
     fn head(
         self: &S3Src,
-        src: &RsBaseSrc,
-        client: &GstS3Client,
+        src: &BaseSrc,
+        client: &S3Client,
         url: &GstS3Url,
-    ) -> Result<u64, ErrorMessage> {
+    ) -> Result<u64, gst::ErrorMessage> {
         let request = HeadObjectRequest {
             bucket: url.bucket.clone(),
             key: url.object.clone(),
@@ -78,8 +97,8 @@ impl S3Src {
             ..Default::default()
         };
 
-        let output = client.head_object(&request).or_else(|err| {
-            Err(error_msg!(
+        let output = client.head_object(request).sync().or_else(|err| {
+            Err(gst_error_msg!(
                 gst::ResourceError::NotFound,
                 ["Failed to HEAD object: {}", err]
             ))
@@ -94,7 +113,7 @@ impl S3Src {
             );
             Ok(size as u64)
         } else {
-            Err(error_msg!(
+            Err(gst_error_msg!(
                 gst::ResourceError::Read,
                 ["Failed to get content length"]
             ))
@@ -103,18 +122,20 @@ impl S3Src {
 
     fn get(
         self: &S3Src,
-        src: &RsBaseSrc,
+        src: &BaseSrc,
         offset: u64,
         length: u64,
-    ) -> Result<Vec<u8>, ErrorMessage> {
-        let (url, client) = match self.state {
+    ) -> Result<Vec<u8>, gst::ErrorMessage> {
+        let state = self.state.lock().unwrap();
+
+        let (url, client) = match *state {
             StreamingState::Started {
                 ref url,
                 ref client,
                 ..
             } => (url, client),
             StreamingState::Stopped => {
-                return Err(error_msg!(
+                return Err(gst_error_msg!(
                     gst::LibraryError::Failed,
                     ["Cannot GET before start()"]
                 ));
@@ -137,8 +158,8 @@ impl S3Src {
             offset + length - 1
         );
 
-        let output = client.get_object(&request).or_else(|err| {
-            Err(error_msg!(gst::ResourceError::Read, [err.to_string()]))
+        let output = client.get_object(request).sync().or_else(|err| {
+            Err(gst_error_msg!(gst::ResourceError::Read, ["Could not read: {}", err]))
         })?;
 
         gst_debug!(
@@ -148,98 +169,176 @@ impl S3Src {
             output.content_length.unwrap()
         );
 
-        let mut body: Vec<u8> = Vec::new();
-
-        output.body.unwrap().read_to_end(&mut body).or_else(|err| {
-            Err(error_msg!(gst::ResourceError::Read, [err.to_string()]))
+        let body = output.body.unwrap().concat2().wait().or_else(|err| {
+            Err(gst_error_msg!(gst::ResourceError::Read, ["Could not read: {}", err]))
         })?;
 
         Ok(body)
     }
 }
 
-impl SourceImpl for S3Src {
-    fn uri_validator(&self) -> Box<UriValidator> {
-        Box::new(|url: &Url| -> Result<(), UriError> {
-            parse_s3_url(url)?;
-            Ok(())
-        })
+impl ObjectImpl<BaseSrc> for S3Src {
+    fn set_property(&self, obj: &glib::Object, id: u32, value: &glib::Value) {
+        let prop = &PROPERTIES[id as usize];
+        let basesrc = obj.downcast_ref::<BaseSrc>().unwrap();
+
+        match *prop {
+            Property::String("uri", ..) => {
+                let url_str = String::from(value.get::<&str>().unwrap());
+                let mut url = self.url.lock().unwrap();
+
+                *url = match parse_s3_url(&url_str) {
+                    Ok(url) => Some(url),
+                    Err(err) => {
+                        gst_error!(self.cat, obj: basesrc, "Could not parser uri {}: {}", url_str, err);
+                        None
+                    }
+                }
+            },
+            _ => unimplemented!()
+        }
     }
 
-    fn is_seekable(&self, _: &RsBaseSrc) -> bool {
+    fn get_property(&self, _: &glib::Object, id: u32) -> Result<glib::Value, ()> {
+        let prop = &PROPERTIES[id as usize];
+
+        match *prop {
+            Property::String("uri", ..) => {
+                let url = ""; // FIXME
+
+                Ok(url.to_value())
+            },
+            _ => unimplemented!()
+        }
+    }
+}
+
+impl ElementImpl<BaseSrc> for S3Src {
+    // No overrides
+}
+
+impl BaseSrcImpl<BaseSrc> for S3Src {
+    fn is_seekable(&self, _: &BaseSrc) -> bool {
         true
     }
 
-    fn get_size(&self, _: &RsBaseSrc) -> Option<u64> {
-        match self.state {
+    fn get_size(&self, _: &BaseSrc) -> Option<u64> {
+        match *self.state.lock().unwrap() {
             StreamingState::Stopped => None,
             StreamingState::Started { size, .. } => Some(size),
         }
     }
 
-    fn start(&mut self, src: &RsBaseSrc, url: Url) -> Result<(), ErrorMessage> {
-        if let StreamingState::Started { .. } = self.state {
-            return Err(error_msg!(
-                gst::LibraryError::Failed,
-                ["Cannot start() while already started"]
-            ));
+    fn start(&self, src: &BaseSrc) -> bool {
+        let mut state = self.state.lock().unwrap();
+
+        if let StreamingState::Started { .. } = *state {
+            gst_error!(self.cat, obj: src, "Cannot start while already started");
+            return false;
         }
 
-        let s3url = parse_s3_url(&url).or_else(|err| {
-            Err(error_msg!(gst::ResourceError::Failed, [err.to_string()]))
-        })?;
+        let s3url = match *self.url.lock().unwrap() {
+            Some(ref url) => {
+                url.clone()
+            }
+            None => {
+                gst_error!(self.cat, obj: src, "Cannot start without a URL being set");
+                return false;
+            }
+        };
 
-        let s3client = self.connect(&s3url)?;
+        let s3client = match self.connect(&s3url) {
+            Ok(client) => client,
+            Err(err) => {
+                gst_error!(self.cat, obj: src, "Error connecting: {}", err);
+                return false
+            }
+        };
 
-        let size = self.head(src, &s3client, &s3url)?;
+        let size = match self.head(src, &s3client, &s3url) {
+            Ok(size) => size,
+            Err(err) => {
+                gst_error!(self.cat, obj: src, "Error completing HEAD request: {}", err);
+                return false
+            }
+        };
 
-        self.state = StreamingState::Started {
+        *state = StreamingState::Started {
             url: s3url,
             client: s3client,
             size: size,
         };
 
-        Ok(())
+        true
     }
 
-    fn stop(&mut self, _: &RsBaseSrc) -> Result<(), ErrorMessage> {
-        if let StreamingState::Stopped = self.state {
-            return Err(error_msg!(
-                gst::LibraryError::Failed,
-                ["Cannot stop() before start()"]
-            ));
+    fn stop(&self, src: &BaseSrc) -> bool {
+        let mut state = self.state.lock().unwrap();
+
+        if let StreamingState::Stopped = *state {
+            gst_error!(self.cat, obj: src, "Cannot stop before start");
+            return false;
         }
 
-        self.state = StreamingState::Stopped;
+        *state = StreamingState::Stopped;
 
-        Ok(())
+        true
     }
 
-    fn fill(
-        &mut self,
-        src: &RsBaseSrc,
+   fn query(&self, src: &BaseSrc, query: &mut gst::QueryRef) -> bool {
+        match query.view_mut() {
+            gst::QueryView::Scheduling(ref mut q) => {
+                q.set(gst::SchedulingFlags::SEQUENTIAL | gst::SchedulingFlags::BANDWIDTH_LIMITED, 1, -1, 0);
+                q.add_scheduling_modes(&[gst::PadMode::Push, gst::PadMode::Pull]);
+                return true;
+            }
+            _ => (),
+        }
+
+        BaseSrcBase::parent_query(src, query)
+    }
+
+    fn create(
+        &self,
+        src: &BaseSrc,
         offset: u64,
         length: u32,
-        buffer: &mut BufferRef,
-    ) -> Result<(), FlowError> {
+    ) -> Result<gst::Buffer, gst::FlowReturn> {
         // FIXME: sanity check on offset and length
-        let data = self.get(src, offset, u64::from(length))
-            .or_else(|err| Err(FlowError::Error(err)))?;
+        let data = self.get(src, offset, u64::from(length));
 
-        buffer
-            .copy_from_slice(0, data.as_slice())
-            .or_else(|copied| {
-                Err(FlowError::Error(error_msg!(
-                    gst::ResourceError::Read,
-                    ["Read {} bytes, but buffer has {} bytes", data.len(), copied]
-                )))
-            })?;
-        buffer.set_size(data.len());
+        if data.is_err() {
+            return Err(gst::FlowReturn::Error);
+        }
 
-        Ok(())
+        let buffer = gst::Buffer::from_mut_slice(data.unwrap()).unwrap();
+
+        Ok(buffer)
     }
 
-    fn seek(&mut self, _: &RsBaseSrc, _: u64, _: Option<u64>) -> Result<(), ErrorMessage> {
-        Ok(())
+    /* FIXME: implement */
+    fn do_seek(&self, _: &BaseSrc, _: &mut gst::Segment) -> bool {
+        true
     }
+}
+
+struct S3SrcStatic;
+
+impl ImplTypeStatic<BaseSrc> for S3SrcStatic {
+    fn get_name(&self) -> &str {
+        "s3src"
+    }
+
+    fn new(&self, basesrc: &BaseSrc) -> Box<BaseSrcImpl<BaseSrc>> {
+        Box::new(S3Src::new(basesrc))
+    }
+
+    fn class_init(&self, klass: &mut BaseSrcClass) {
+        S3Src::class_init(klass)
+    }
+}
+
+pub fn register(plugin: &gst::Plugin) {
+    let typ = register_type(S3SrcStatic);
+    gst::Element::register(plugin, "s3src", 0, typ);
 }

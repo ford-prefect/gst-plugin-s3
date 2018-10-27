@@ -1,19 +1,20 @@
 [package]
 name = "gst-plugin-s3"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Arun Raghavan <arun@arunraghavan.net>"]
 repository = "https://github.com/ford-prefect/gst-plugin-s3"
 license = "MIT/Apache-2.0"
 
 [dependencies]
-gst-plugin = { git = "https://github.com/sdroege/gst-plugin-rs" }
-gst-plugin-simple = { git = "https://github.com/sdroege/gst-plugin-rs" }
-gstreamer = { git = "https://github.com/sdroege/gstreamer-rs" }
-hyper = "0.10"
-rusoto_core = "0.28.0"
-rusoto_s3 = "0.28.0"
-slog = "2.0"
-url = "1.1"
+futures = "0.1"
+glib = "0.6"
+gobject-subclass = "0.2"
+gstreamer = "0.12"
+gstreamer-base = "0.12"
+gst-plugin = "0.3"
+rusoto_core = "0.34.0"
+rusoto_s3 = "0.34.0"
+url = "1.7"
 
 [lib]
 name = "gsts3"

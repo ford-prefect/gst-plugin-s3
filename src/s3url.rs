@@ -11,9 +11,7 @@ use std::str::FromStr;
 use rusoto_core::Region;
 use url::Url;
 
-use gst;
-use gst_plugin::error::*;
-
+#[derive(Clone)]
 pub struct GstS3Url {
     pub region: Region,
     pub bucket: String,
@@ -21,48 +19,37 @@ pub struct GstS3Url {
     pub version: Option<String>,
 }
 
-pub fn parse_s3_url(url: &Url) -> Result<GstS3Url, UriError> {
+pub fn parse_s3_url(url_str: &String) -> Result<GstS3Url, String> {
+    let url = Url::parse(url_str).or_else(|err| {
+        Err(format!("Parse error: {}", err))
+    })?;
+
     if url.scheme() != "s3" {
-        return Err(UriError::new(
-            gst::URIError::UnsupportedProtocol,
-            format!("Unsupported URI '{}'", url.scheme()),
-        ));
+        return Err(format!("Unsupported URI '{}'", url.scheme()))
     }
 
     if !url.has_host() {
-        return Err(UriError::new(
-            gst::URIError::BadUri,
-            format!("Invalid host in uri '{}'", url),
-        ));
+        return Err(format!("Invalid host in uri '{}'", url))
     }
 
     let host = url.host_str().unwrap();
     let region = Region::from_str(host).or_else(|_| {
-        Err(UriError::new(
-            gst::URIError::BadUri,
-            format!("Invalid region '{}'", host),
-        ))
+        Err(format!("Invalid region '{}'", host))
     })?;
 
     let mut path = url.path_segments().ok_or_else(|| {
-        UriError::new(gst::URIError::BadUri, format!("Invalid uri '{}'", url))
+        format!("Invalid uri '{}'", url)
     })?;
 
     let bucket = path.next().unwrap().to_string();
 
     let o = path.next().ok_or_else(|| {
-        UriError::new(
-            gst::URIError::BadUri,
-            format!("Invalid empty object/bucket '{}'", url),
-        )
+        format!("Invalid empty object/bucket '{}'", url)
     })?;
 
     let mut object = o.to_string();
     if o.is_empty() {
-        return Err(UriError::new(
-            gst::URIError::BadUri,
-            format!("Invalid empty object/bucket '{}'", url),
-        ));
+        return Err(format!("Invalid empty object/bucket '{}'", url));
     }
 
     object = path.fold(object, |o, p| format!("{}/{}", o, p));
@@ -75,18 +62,12 @@ pub fn parse_s3_url(url: &Url) -> Result<GstS3Url, UriError> {
         Some((ref k, ref v)) if k == "version" => version = Some((*v).to_string()),
         None => version = None,
         Some(_) => {
-            return Err(UriError::new(
-                gst::URIError::BadUri,
-                "Bad query, only 'version' is supported".to_owned(),
-            ));
+            return Err("Bad query, only 'version' is supported".to_owned())
         }
     }
 
     if q.next() != None {
-        return Err(UriError::new(
-            gst::URIError::BadUri,
-            "Extra query terms, only 'version' is supported".to_owned(),
-        ));
+        return Err("Extra query terms, only 'version' is supported".to_owned())
     }
 
     Ok(GstS3Url {

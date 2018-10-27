@@ -8,40 +8,23 @@
 
 #![crate_type = "cdylib"]
 
-extern crate hyper;
+extern crate futures;
 extern crate rusoto_core;
 extern crate rusoto_s3;
 extern crate url;
 
-#[macro_use]
-extern crate gst_plugin;
-extern crate gst_plugin_simple;
+extern crate gobject_subclass;
 #[macro_use]
 extern crate gstreamer as gst;
-
-use gst_plugin_simple::source::*;
+extern crate gstreamer_base as gst_base;
+#[macro_use]
+extern crate gst_plugin;
 
 mod s3url;
 mod s3src;
 
-use s3src::S3Src;
-
 fn plugin_init(plugin: &gst::Plugin) -> bool {
-    source_register(
-        plugin,
-        SourceInfo {
-            name: "s3src".into(),
-            long_name: "Amazon S3 Source".into(),
-            description: "Reads an object from an S3 region and bucket".into(),
-            classification: "Source/Network".into(),
-            author: "Arun Raghavan <arun@arunraghavan.net>".into(),
-            rank: 256,
-            create_instance: S3Src::new_boxed,
-            protocols: vec!["s3".into()],
-            push_only: true,
-        },
-    );
-
+    s3src::register(plugin);
     true
 }
 
