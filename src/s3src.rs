@@ -49,6 +49,8 @@ static PROPERTIES: [Property; 1] = [Property::String(
 impl S3Src {
     pub fn new(basesrc: &BaseSrc) -> S3Src {
         basesrc.set_format(gst::Format::Bytes);
+        /* Set a larger default blocksize to make read more efficient */
+        basesrc.set_blocksize(262144);
 
         S3Src {
             url: Mutex::new(None),
