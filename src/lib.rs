@@ -13,29 +13,27 @@ extern crate rusoto_core;
 extern crate rusoto_s3;
 extern crate url;
 
-extern crate gobject_subclass;
+#[macro_use]
+extern crate glib;
 #[macro_use]
 extern crate gstreamer as gst;
 extern crate gstreamer_base as gst_base;
-#[macro_use]
-extern crate gst_plugin;
 
 mod s3url;
 mod s3src;
 
-fn plugin_init(plugin: &gst::Plugin) -> bool {
-    s3src::register(plugin);
-    true
+fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
+    s3src::register(plugin)
 }
 
-plugin_define!(
-    b"s3src\0",
-    b"Amazon S3 Plugin\0",
+gst_plugin_define!(
+    "s3src",
+    "Amazon S3 Plugin",
     plugin_init,
-    b"1.0\0",
-    b"MIT/X11\0",
-    b"s3\0",
-    b"s3\0",
-    b"https://github.com/ford-prefect/gst-plugin-s3\0",
-    b"2017-04-17\0"
+    "1.0",
+    "MIT/X11",
+    "s3",
+    "s3",
+    "https://github.com/ford-prefect/gst-plugin-s3",
+    "2017-04-17"
 );
