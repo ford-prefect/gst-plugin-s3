@@ -54,6 +54,40 @@ impl S3Src {
         Ok(S3Client::new(url.region.clone()))
     }
 
+    fn set_uri(self: &S3Src, _: &gst_base::BaseSrc, url_str: Option<String>) -> Result<(), glib::Error> {
+        let state = self.state.lock().unwrap();
+
+        if let StreamingState::Started { .. } = *state {
+            return Err(gst::Error::new(
+                gst::URIError::BadState,
+                "Cannot set URI on a started s3src"
+            ));
+        }
+
+        let mut url = self.url.lock().unwrap();
+
+        match url_str {
+            Some(s) => {
+                match parse_s3_url(&s) {
+                    Ok(s3url) => {
+                        *url = Some(s3url);
+                        Ok(())
+                    },
+                    Err(_) => {
+                        Err(gst::Error::new(
+                                gst::URIError::BadUri,
+                                "Could not parse URI"
+                        ))
+                    }
+                }
+            },
+            None => {
+                *url = None;
+                Ok(())
+            }
+        }
+    }
+
     fn head(
         self: &S3Src,
         src: &gst_base::BaseSrc,
@@ -167,6 +201,10 @@ impl ObjectSubclass for S3Src {
         }
     }
 
+    fn type_init(typ: &mut subclass::InitializingType<Self>) {
+        typ.add_interface::<gst::URIHandler>();
+    }
+
     fn class_init(klass: &mut subclass::simple::ClassStruct<Self>) {
         klass.set_metadata(
             "Amazon S3 source",
@@ -197,16 +235,9 @@ impl ObjectImpl for S3Src {
 
         match *prop {
             subclass::Property("uri", ..) => {
-                let url_str = value.get().unwrap();
-                let mut url = self.url.lock().unwrap();
-
-                *url = match parse_s3_url(url_str) {
-                    Ok(url) => Some(url),
-                    Err(err) => {
-                        gst_error!(self.cat, obj: basesrc, "Could not parser uri {}: {}", url_str, err);
-                        None
-                    }
-                }
+                self.set_uri(basesrc, value.get()).unwrap_or_else(|err| {
+                    gst_error!(self.cat, obj: basesrc, "Could not set URI: {}", err);
+                });
             },
             _ => unimplemented!()
         }
@@ -240,6 +271,25 @@ impl ObjectImpl for S3Src {
 
 impl ElementImpl for S3Src {
     // No overrides
+}
+
+impl URIHandlerImpl for S3Src {
+    fn get_uri(&self, _: &gst::URIHandler) -> Option<String> {
+        self.url.lock().unwrap().as_ref().map(|s| s.to_string())
+    }
+
+    fn set_uri(&self, element: &gst::URIHandler, uri: Option<String>) -> Result<(), glib::Error> {
+        let basesrc = element.dynamic_cast_ref::<gst_base::BaseSrc>().unwrap();
+        self.set_uri(basesrc, uri)
+    }
+
+    fn get_uri_type() -> gst::URIType {
+        gst::URIType::Src
+    }
+
+    fn get_protocols() -> Vec<String> {
+        vec!["s3".to_string()]
+    }
 }
 
 impl BaseSrcImpl for S3Src {
