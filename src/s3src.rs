@@ -23,7 +23,7 @@ use gst_base;
 use gst_base::prelude::*;
 use gst_base::subclass::prelude::*;
 
-use s3url::*;
+use crate::s3url::*;
 
 enum StreamingState {
     Stopped,

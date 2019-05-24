@@ -4,6 +4,7 @@ version = "0.3.0"
 authors = ["Arun Raghavan <arun@arunraghavan.net>"]
 repository = "https://github.com/ford-prefect/gst-plugin-s3"
 license = "MIT/Apache-2.0"
+edition = "2018"
 
 [dependencies]
 bytes = "0.4"
