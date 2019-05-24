@@ -8,6 +8,7 @@
 
 use std::sync::Mutex;
 
+use bytes::Bytes;
 use futures::{Future,Stream};
 use rusoto_s3::*;
 
@@ -129,7 +130,7 @@ impl S3Src {
         src: &gst_base::BaseSrc,
         offset: u64,
         length: u64,
-    ) -> Result<Vec<u8>, gst::ErrorMessage> {
+    ) -> Result<Bytes, gst::ErrorMessage> {
         let state = self.state.lock().unwrap();
 
         let (url, client) = match *state {
@@ -372,7 +373,7 @@ impl BaseSrcImpl for S3Src {
             return Err(gst::FlowError::Error);
         }
 
-        let buffer = gst::Buffer::from_mut_slice(data.unwrap());
+        let buffer = gst::Buffer::from_slice(data.unwrap());
 
         Ok(buffer)
     }

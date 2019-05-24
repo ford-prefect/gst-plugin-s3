@@ -8,6 +8,7 @@
 
 #![crate_type = "cdylib"]
 
+extern crate bytes;
 extern crate futures;
 extern crate rusoto_core;
 extern crate rusoto_s3;
