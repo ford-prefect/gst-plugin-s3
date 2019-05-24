@@ -9,7 +9,7 @@
 use std::sync::Mutex;
 
 use bytes::Bytes;
-use futures::{Future,Stream};
+use futures::{Future, Stream};
 use rusoto_s3::*;
 
 use glib::prelude::*;
@@ -46,7 +46,7 @@ static PROPERTIES: [subclass::Property; 1] = [subclass::Property("uri", |name| {
         "URI",
         "The S3 object URI",
         None,
-        glib::ParamFlags::READWRITE /* + GST_PARAM_MUTABLE_READY) */
+        glib::ParamFlags::READWRITE, /* + GST_PARAM_MUTABLE_READY) */
     )
 })];
 
@@ -55,32 +55,32 @@ impl S3Src {
         Ok(S3Client::new(url.region.clone()))
     }
 
-    fn set_uri(self: &S3Src, _: &gst_base::BaseSrc, url_str: Option<String>) -> Result<(), glib::Error> {
+    fn set_uri(
+        self: &S3Src,
+        _: &gst_base::BaseSrc,
+        url_str: Option<String>,
+    ) -> Result<(), glib::Error> {
         let state = self.state.lock().unwrap();
 
         if let StreamingState::Started { .. } = *state {
             return Err(gst::Error::new(
                 gst::URIError::BadState,
-                "Cannot set URI on a started s3src"
+                "Cannot set URI on a started s3src",
             ));
         }
 
         let mut url = self.url.lock().unwrap();
 
         match url_str {
-            Some(s) => {
-                match parse_s3_url(&s) {
-                    Ok(s3url) => {
-                        *url = Some(s3url);
-                        Ok(())
-                    },
-                    Err(_) => {
-                        Err(gst::Error::new(
-                                gst::URIError::BadUri,
-                                "Could not parse URI"
-                        ))
-                    }
+            Some(s) => match parse_s3_url(&s) {
+                Ok(s3url) => {
+                    *url = Some(s3url);
+                    Ok(())
                 }
+                Err(_) => Err(gst::Error::new(
+                    gst::URIError::BadUri,
+                    "Could not parse URI",
+                )),
             },
             None => {
                 *url = None;
@@ -164,7 +164,10 @@ impl S3Src {
         );
 
         let output = client.get_object(request).sync().or_else(|err| {
-            Err(gst_error_msg!(gst::ResourceError::Read, ["Could not read: {}", err]))
+            Err(gst_error_msg!(
+                gst::ResourceError::Read,
+                ["Could not read: {}", err]
+            ))
         })?;
 
         gst_debug!(
@@ -175,7 +178,10 @@ impl S3Src {
         );
 
         let body = output.body.unwrap().concat2().wait().or_else(|err| {
-            Err(gst_error_msg!(gst::ResourceError::Read, ["Could not read: {}", err]))
+            Err(gst_error_msg!(
+                gst::ResourceError::Read,
+                ["Could not read: {}", err]
+            ))
         })?;
 
         Ok(body)
@@ -220,7 +226,8 @@ impl ObjectSubclass for S3Src {
             gst::PadDirection::Src,
             gst::PadPresence::Always,
             &caps,
-        ).unwrap();
+        )
+        .unwrap();
         klass.add_pad_template(src_pad_template);
 
         klass.install_properties(&PROPERTIES);
@@ -239,8 +246,8 @@ impl ObjectImpl for S3Src {
                 self.set_uri(basesrc, value.get()).unwrap_or_else(|err| {
                     gst_error!(self.cat, obj: basesrc, "Could not set URI: {}", err);
                 });
-            },
-            _ => unimplemented!()
+            }
+            _ => unimplemented!(),
         }
     }
 
@@ -251,12 +258,12 @@ impl ObjectImpl for S3Src {
             subclass::Property("uri", ..) => {
                 let url = match *self.url.lock().unwrap() {
                     Some(ref url) => url.to_string(),
-                    None => "".to_string()
+                    None => "".to_string(),
                 };
 
                 Ok(url.to_value())
-            },
-            _ => unimplemented!()
+            }
+            _ => unimplemented!(),
         }
     }
 
@@ -347,10 +354,15 @@ impl BaseSrcImpl for S3Src {
         Ok(())
     }
 
-   fn query(&self, src: &gst_base::BaseSrc, query: &mut gst::QueryRef) -> bool {
+    fn query(&self, src: &gst_base::BaseSrc, query: &mut gst::QueryRef) -> bool {
         match query.view_mut() {
             gst::QueryView::Scheduling(ref mut q) => {
-                q.set(gst::SchedulingFlags::SEQUENTIAL | gst::SchedulingFlags::BANDWIDTH_LIMITED, 1, -1, 0);
+                q.set(
+                    gst::SchedulingFlags::SEQUENTIAL | gst::SchedulingFlags::BANDWIDTH_LIMITED,
+                    1,
+                    -1,
+                    0,
+                );
                 q.add_scheduling_modes(&[gst::PadMode::Push, gst::PadMode::Pull]);
                 return true;
             }

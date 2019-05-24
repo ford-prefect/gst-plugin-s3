@@ -21,41 +21,43 @@ pub struct GstS3Url {
 
 impl ToString for GstS3Url {
     fn to_string(&self) -> String {
-        format!("s3://{}/{}/{}{}",
-                self.region.name(),
-                self.bucket,
-                self.object,
-                if self.version.is_some() { format!("?version={}", self.version.clone().unwrap()) } else { "".to_string() })
+        format!(
+            "s3://{}/{}/{}{}",
+            self.region.name(),
+            self.bucket,
+            self.object,
+            if self.version.is_some() {
+                format!("?version={}", self.version.clone().unwrap())
+            } else {
+                "".to_string()
+            }
+        )
     }
 }
 
 pub fn parse_s3_url(url_str: &str) -> Result<GstS3Url, String> {
-    let url = Url::parse(url_str).or_else(|err| {
-        Err(format!("Parse error: {}", err))
-    })?;
+    let url = Url::parse(url_str).or_else(|err| Err(format!("Parse error: {}", err)))?;
 
     if url.scheme() != "s3" {
-        return Err(format!("Unsupported URI '{}'", url.scheme()))
+        return Err(format!("Unsupported URI '{}'", url.scheme()));
     }
 
     if !url.has_host() {
-        return Err(format!("Invalid host in uri '{}'", url))
+        return Err(format!("Invalid host in uri '{}'", url));
     }
 
     let host = url.host_str().unwrap();
-    let region = Region::from_str(host).or_else(|_| {
-        Err(format!("Invalid region '{}'", host))
-    })?;
+    let region = Region::from_str(host).or_else(|_| Err(format!("Invalid region '{}'", host)))?;
 
-    let mut path = url.path_segments().ok_or_else(|| {
-        format!("Invalid uri '{}'", url)
-    })?;
+    let mut path = url
+        .path_segments()
+        .ok_or_else(|| format!("Invalid uri '{}'", url))?;
 
     let bucket = path.next().unwrap().to_string();
 
-    let o = path.next().ok_or_else(|| {
-        format!("Invalid empty object/bucket '{}'", url)
-    })?;
+    let o = path
+        .next()
+        .ok_or_else(|| format!("Invalid empty object/bucket '{}'", url))?;
 
     let mut object = o.to_string();
     if o.is_empty() {
@@ -71,13 +73,11 @@ pub fn parse_s3_url(url_str: &str) -> Result<GstS3Url, String> {
     match v {
         Some((ref k, ref v)) if k == "version" => version = Some((*v).to_string()),
         None => version = None,
-        Some(_) => {
-            return Err("Bad query, only 'version' is supported".to_owned())
-        }
+        Some(_) => return Err("Bad query, only 'version' is supported".to_owned()),
     }
 
     if q.next() != None {
-        return Err("Extra query terms, only 'version' is supported".to_owned())
+        return Err("Extra query terms, only 'version' is supported".to_owned());
     }
 
     Ok(GstS3Url {

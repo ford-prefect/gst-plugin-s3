@@ -20,8 +20,8 @@ extern crate glib;
 extern crate gstreamer as gst;
 extern crate gstreamer_base as gst_base;
 
-mod s3url;
 mod s3src;
+mod s3url;
 
 fn plugin_init(plugin: &gst::Plugin) -> Result<(), glib::BoolError> {
     s3src::register(plugin)
