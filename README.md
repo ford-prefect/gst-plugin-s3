@@ -1,3 +1,9 @@
+# Deprecation notice
+
+*The GStreamer S3 plugin has been merged into the upstream
+[GStreamer Rust Plugins](https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs)
+repository.*
+
 # gst-plugin-s3
 
 [![Build Status](https://travis-ci.org/ford-prefect/gst-plugin-s3.svg?branch=master)](https://travis-ci.org/ford-prefect/gst-plugin-s3)
